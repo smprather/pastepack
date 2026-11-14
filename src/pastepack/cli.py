@@ -5,7 +5,7 @@ from pathlib import Path
 
 import rich_click as click
 
-from .codec import BEGIN_MARKER, PackError, find_payloads, pack, unpack, wrap
+from .codec import BEGIN_MARKER, PackError, pack, unpack, wrap
 
 WRAP_COLUMNS = 100
 OUTPUT_DIR_ENV = "PASTEPACK_OUTPUT_DIR"
@@ -91,16 +91,18 @@ def unpack_command(input_file: str | None, output: Path | None, force: bool, ver
 def pp(input_file: Path) -> None:
     """Toggle INPUT_FILE between plain and packed.
 
-    If INPUT_FILE holds a packed payload with an embedded filename, the
-    original is written to ./<filename>. If it holds no payload, it is packed
-    to <name>.pack, in the directory named by PASTEPACK_OUTPUT_DIR when
-    that directory exists, otherwise next to INPUT_FILE. Existing output files
-    are always overwritten.
+    INPUT_FILE counts as packed when its name ends in .pack or its contents
+    begin with the payload marker; the original is then written to
+    ./<embedded filename>. Any other file is packed to <name>.pack, in the
+    directory named by PASTEPACK_OUTPUT_DIR when that directory exists,
+    otherwise next to INPUT_FILE. Existing output files are always overwritten.
+
+    To pull a payload out of the middle of a messy paste, use 'pastepack unpack'.
     """
     try:
         data = input_file.read_bytes()
         text = data.decode("utf-8", errors="replace")
-        if find_payloads(text) or BEGIN_MARKER in text:
+        if input_file.name.endswith(PACKED_SUFFIX) or text.lstrip().startswith(BEGIN_MARKER):
             unpacked = unpack(text, passphrase=_passphrase())
             if unpacked.filename is None:
                 raise PackError("payload has no embedded filename; use 'pastepack unpack' instead")

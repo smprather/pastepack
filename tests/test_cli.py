@@ -314,3 +314,32 @@ def test_pp_wrong_passphrase_fails_without_repacking() -> None:
 
     assert result.exit_code != 0
     assert not Path("note.txt.pack.pack").exists()
+
+
+def test_pp_packs_file_that_only_mentions_a_payload() -> None:
+    from pastepack.codec import pack
+
+    Path("doc.md").write_text(f"An example payload:\n\n{pack(b'sample')}\n")
+
+    assert run_pp("doc.md").exit_code == 0
+    assert Path("doc.md.pack").read_bytes().startswith(b"-pack-")
+
+
+def test_pp_unpacks_file_that_begins_with_a_payload_whatever_its_name() -> None:
+    from pastepack.codec import pack
+
+    Path("saved.txt").write_text("\n  " + pack(b"x", filename="orig.txt") + "\n")
+
+    assert run_pp("saved.txt").exit_code == 0
+    assert Path("orig.txt").read_bytes() == b"x"
+    assert not Path("saved.txt.pack").exists()
+
+
+def test_pp_pack_suffix_without_payload_fails_without_repacking() -> None:
+    Path("empty.pack").write_text("nothing packed here")
+
+    result = run_pp("empty.pack")
+
+    assert result.exit_code != 0
+    assert "no payload found" in result.stderr
+    assert not Path("empty.pack.pack").exists()

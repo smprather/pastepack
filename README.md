@@ -110,8 +110,10 @@ Only the final component of an embedded filename is ever used, so a payload cann
 
 `pp FILE` does the obvious thing for a file:
 
-- If `FILE` contains a packed payload with an embedded filename, the original is written to `./<filename>`.
+- If `FILE` is packed, the original is written to `./<embedded filename>`. A file counts as packed when its name ends in `.pack` or its contents begin with `-pack-`.
 - Otherwise `FILE` is packed to `FILE.pack`. If `PASTEPACK_OUTPUT_DIR` names an existing directory, the `.pack` file goes there instead of next to `FILE`.
+
+A file that merely contains a payload somewhere, such as a saved terminal transcript, is not treated as packed; use `pastepack unpack FILE -o .` for that.
 
 `pp` takes no options and, unlike `pack` and `unpack`, **always overwrites** existing output files.
 
