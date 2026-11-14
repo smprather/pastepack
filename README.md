@@ -84,7 +84,7 @@ One executable with two subcommands, plus a shortcut:
 ### `pack` and `unpack`
 
 ```text
-pastepack pack   [INPUT_FILE] [-o FILE] [-f] [-v]
+pastepack pack   [INPUT_FILE] [-o FILE] [-w COLUMNS] [-f] [-v]
 pastepack unpack [INPUT_FILE] [-o PATH] [-f] [-v]
 ```
 
@@ -93,6 +93,7 @@ Both read `INPUT_FILE`, or stdin until EOF when it is omitted or `-`, and both w
 | Option | Meaning |
 | --- | --- |
 | `-o`, `--output` | Write to a file instead of stdout. For `unpack`, a directory means "use the embedded filename". |
+| `-w`, `--columns` | `pack` only: wrap at `COLUMNS` characters. Default 150, narrowed to the terminal width when stdout is a terminal. |
 | `-f`, `--force` | Allow overwriting an existing output file. Without it, existing files are never touched. |
 | `-v`, `--verbose` | Print a one-line summary to stderr, including any embedded filename. |
 
@@ -128,7 +129,7 @@ A file that merely contains a payload somewhere, such as a saved terminal transc
 
 The output is built to survive rough handling:
 
-- `pack` wraps at 100 columns.
+- `pack` wraps at 150 columns by default, narrowed to the terminal width when stdout is a terminal. `--columns` sets the width outright.
 - `unpack` only looks at what sits between the `-pack-` and `-end-` markers.
 - Inside the markers, whitespace and terminal escape sequences are ignored.
 

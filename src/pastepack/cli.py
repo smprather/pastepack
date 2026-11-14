@@ -1,18 +1,29 @@
 from __future__ import annotations
 
 import os
+import shutil
+import sys
 from pathlib import Path
 
 import rich_click as click
+from click.core import ParameterSource
 
 from .codec import BEGIN_MARKER, PackError, pack, unpack, wrap
 
-WRAP_COLUMNS = 100
+WRAP_COLUMNS = 150
 OUTPUT_DIR_ENV = "PASTEPACK_OUTPUT_DIR"
 PACKED_SUFFIX = ".pack"
 
 input_argument = click.argument("input_file", required=False, type=click.Path(dir_okay=False, allow_dash=True))
 force_option = click.option("-f", "--force", is_flag=True, help="Overwrite the output file if it already exists.")
+columns_option = click.option(
+    "-w",
+    "--columns",
+    type=click.IntRange(min=1),
+    default=WRAP_COLUMNS,
+    show_default=True,
+    help="Wrap output at COLUMNS characters. The default narrows to the terminal width when stdout is a terminal.",
+)
 verbose_option = click.option("-v", "--verbose", is_flag=True, help="Describe what was done on stderr.")
 
 
@@ -28,9 +39,13 @@ def main() -> None:
 @main.command("pack")
 @input_argument
 @click.option("-o", "--output", type=click.Path(path_type=Path, dir_okay=False), help="Write to FILE instead of stdout.")
+@columns_option
 @force_option
 @verbose_option
-def pack_command(input_file: str | None, output: Path | None, force: bool, verbose: bool) -> None:
+@click.pass_context
+def pack_command(
+    ctx: click.Context, input_file: str | None, output: Path | None, columns: int, force: bool, verbose: bool
+) -> None:
     """Compress, encrypt, and encode INPUT_FILE as text, or stdin when omitted.
 
     A named INPUT_FILE has its basename embedded in the payload.
@@ -40,7 +55,7 @@ def pack_command(input_file: str | None, output: Path | None, force: bool, verbo
         data = _read(source)
         filename = None if source is None else source.name
         packed = pack(data, filename=filename, passphrase=_passphrase())
-        _write(wrap(packed, WRAP_COLUMNS).encode("ascii") + b"\n", output, force)
+        _write(wrap(packed, _wrap_columns(columns, output, ctx)).encode("ascii") + b"\n", output, force)
     except (OSError, PackError) as exc:
         raise click.ClickException(str(exc)) from exc
 
@@ -118,6 +133,19 @@ def pp(input_file: Path) -> None:
             _note(f"packed {input_file} to {target}")
     except (OSError, PackError) as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+def _wrap_columns(columns: int, output: Path | None, ctx: click.Context) -> int:
+    """Narrow the default width to the terminal; an explicit --columns is used as given."""
+    if output is not None or ctx.get_parameter_source("columns") is ParameterSource.COMMANDLINE:
+        return columns
+    if not _stdout_is_terminal():
+        return columns
+    return min(columns, shutil.get_terminal_size().columns)
+
+
+def _stdout_is_terminal() -> bool:
+    return bool(getattr(sys.stdout, "isatty", lambda: False)())
 
 
 def _pack_dir(input_file: Path) -> Path:

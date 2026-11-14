@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner, Result
 
+from pastepack import cli
 from pastepack.cli import main
 
 
@@ -53,8 +54,53 @@ def test_enc_wraps_long_output() -> None:
 
     lines = packed.splitlines()
     assert len(lines) > 1
-    assert max(len(line) for line in lines) == 100
+    assert max(len(line) for line in lines) == 150
     assert run("unpack", input=packed).stdout_bytes == plaintext
+
+
+def test_columns_option_sets_the_width() -> None:
+    plaintext = os.urandom(2048)
+
+    packed = pack_cli("--columns", "40", input=plaintext)
+
+    assert max(len(line) for line in packed.splitlines()) == 40
+    assert run("unpack", input=packed).stdout_bytes == plaintext
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_columns_must_be_positive(value: str) -> None:
+    result = run("pack", "--columns", value, input=b"x")
+
+    assert result.exit_code == 2
+    assert "--columns" in result.stderr
+
+
+def test_default_width_clamps_to_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COLUMNS", "60")
+    monkeypatch.setattr(cli, "_stdout_is_terminal", lambda: True)
+
+    packed = pack_cli(input=os.urandom(2048))
+
+    assert max(len(line) for line in packed.splitlines()) == 60
+
+
+def test_explicit_width_ignores_the_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COLUMNS", "60")
+    monkeypatch.setattr(cli, "_stdout_is_terminal", lambda: True)
+
+    packed = pack_cli("--columns", "120", input=os.urandom(2048))
+
+    assert max(len(line) for line in packed.splitlines()) == 120
+
+
+def test_file_output_ignores_the_terminal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("COLUMNS", "60")
+    monkeypatch.setattr(cli, "_stdout_is_terminal", lambda: True)
+    target = tmp_path / "packed.txt"
+
+    assert run("pack", "-o", str(target), input=os.urandom(2048)).exit_code == 0
+
+    assert max(len(line) for line in target.read_bytes().splitlines()) == 150
 
 
 def test_file_input_unpacks_to_stdout_and_leaves_files_alone(tmp_path: Path) -> None:
