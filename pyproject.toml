@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 text-serdes = "text_serdes.cli:main"
+ts = "text_serdes.cli:ts"
 
 [dependency-groups]
 dev = [

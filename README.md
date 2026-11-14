@@ -55,6 +55,15 @@ An existing file is never overwritten unless you add `-f`/`--force`. Only the fi
 
 `-v`/`--verbose` prints a one-line summary to stderr, including any embedded filename.
 
+### `ts` shortcut
+
+`ts FILE` does the obvious thing for a file:
+
+- If FILE contains an encoded payload with an embedded filename, the original is written to `./<filename>`.
+- Otherwise FILE is encoded to `FILE.ts`. If `TEXT_SERDES_ENCODE_OUTPUT_DIR` names an existing directory, the `.ts` file goes there instead of next to FILE.
+
+`ts` takes no options and always overwrites existing output files.
+
 ### Pasting
 
 `enc` wraps its output at 100 columns. `dec` only looks at what sits between the `-ts-` and `-end-` markers, and ignores whitespace and terminal escape sequences inside them, so you can paste a whole terminal transcript with the payload somewhere in the middle.

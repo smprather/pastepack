@@ -232,3 +232,91 @@ def test_installed_entry_points(argv: list[str]) -> None:
     decoded = subprocess.run([*argv, "dec"], input=encoded, capture_output=True, check=True).stdout
 
     assert decoded == b"real process"
+
+
+# -- ts shortcut -----------------------------------------------------------
+
+
+def run_ts(*args: str, env: dict[str, str] | None = None) -> Result:
+    from text_serdes.cli import ts
+
+    return CliRunner().invoke(ts, list(args), env=env)
+
+
+def test_ts_encodes_plain_file_next_to_input(tmp_path: Path) -> None:
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "note.txt").write_bytes(b"hello")
+
+    result = run_ts("sub/note.txt")
+
+    assert result.exit_code == 0
+    assert (tmp_path / "sub" / "note.txt.ts").read_bytes().startswith(b"-ts-")
+
+
+def test_ts_encodes_into_output_dir_when_it_exists(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    Path("note.txt").write_bytes(b"hello")
+
+    result = run_ts("note.txt", env={"TEXT_SERDES_ENCODE_OUTPUT_DIR": str(out)})
+
+    assert result.exit_code == 0
+    assert (out / "note.txt.ts").exists()
+    assert not Path("note.txt.ts").exists()
+
+
+def test_ts_ignores_missing_output_dir(tmp_path: Path) -> None:
+    Path("note.txt").write_bytes(b"hello")
+
+    result = run_ts("note.txt", env={"TEXT_SERDES_ENCODE_OUTPUT_DIR": str(tmp_path / "nope")})
+
+    assert result.exit_code == 0
+    assert Path("note.txt.ts").exists()
+
+
+def test_ts_encode_overwrites_existing_output() -> None:
+    Path("note.txt").write_bytes(b"hello")
+    Path("note.txt.ts").write_bytes(b"old")
+
+    assert run_ts("note.txt").exit_code == 0
+    assert Path("note.txt.ts").read_bytes().startswith(b"-ts-")
+
+def test_ts_decodes_to_embedded_filename_and_overwrites(tmp_path: Path) -> None:
+    Path("note.txt").write_bytes(b"original\x00")
+    assert run_ts("note.txt").exit_code == 0
+    Path("note.txt").write_bytes(b"clobber me")
+
+    result = run_ts("note.txt.ts")
+
+    assert result.exit_code == 0
+    assert Path("note.txt").read_bytes() == b"original\x00"
+
+
+def test_ts_decode_uses_only_basename_of_embedded_name(tmp_path: Path) -> None:
+    from text_serdes.codec import encode, wrap
+
+    Path("evil.ts").write_text(wrap(encode(b"x", filename="../../escape.txt"), 100))
+
+    assert run_ts("evil.ts").exit_code == 0
+    assert Path("escape.txt").read_bytes() == b"x"
+
+
+def test_ts_decode_without_embedded_filename_fails() -> None:
+    from text_serdes.codec import encode
+
+    Path("anon.ts").write_text(encode(b"x"))
+
+    result = run_ts("anon.ts")
+
+    assert result.exit_code != 0
+    assert "no embedded filename" in result.stderr
+
+
+def test_ts_wrong_passphrase_fails_without_reencoding() -> None:
+    Path("note.txt").write_bytes(b"hello")
+    assert run_ts("note.txt", env={"TS_KEY": "a"}).exit_code == 0
+
+    result = run_ts("note.txt.ts", env={"TS_KEY": "b"})
+
+    assert result.exit_code != 0
+    assert not Path("note.txt.ts.ts").exists()
