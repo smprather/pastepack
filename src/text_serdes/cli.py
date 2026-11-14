@@ -1,220 +1,119 @@
 from __future__ import annotations
 
-import json
 import os
-import sys
-from datetime import datetime, timezone
-from hashlib import sha256
 from pathlib import Path
 
 import rich_click as click
 
-from .codec import CodecError, decrypt_payload, encrypt_bytes
+from .codec import CodecError, decode, encode, wrap
 
-OUTPUT_WRAP_COLUMNS = 100
+WRAP_COLUMNS = 100
+ALIASES = {"encode": "enc", "decode": "dec"}
 
-
-def read_input(path: str | None) -> bytes:
-    stdin = click.get_binary_stream("stdin")
-    if path is None:
-        return stdin.read()
-
-    with open(path, "rb") as handle:
-        return handle.read()
+input_argument = click.argument("input_file", required=False, type=click.Path(dir_okay=False, allow_dash=True))
+force_option = click.option("-f", "--force", is_flag=True, help="Overwrite the output file if it already exists.")
+verbose_option = click.option("-v", "--verbose", is_flag=True, help="Describe what was done on stderr.")
 
 
-def write_output(payload: bytes, output_file: Path | None) -> None:
-    if output_file is None:
-        stdout = click.get_binary_stream("stdout")
-        stdout.write(payload)
-        return
-
-    with open(output_file, "wb") as handle:
-        handle.write(payload)
+class AliasGroup(click.RichGroup):
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        return super().get_command(ctx, ALIASES.get(cmd_name, cmd_name))
 
 
-def _dev_log_path(command: str) -> Path:
-    return Path(os.getenv("TEXT_SERDES_DEV_DIR", "/tmp/text-serdes-dev")) / f"{command}-latest.json"
+@click.group(cls=AliasGroup, context_settings={"help_option_names": ["-h", "--help"]})
+@click.version_option(package_name="text-serdes")
+def main() -> None:
+    """Mangle text or files for transport over copy/paste interfaces.
+
+    Set TS_KEY to fold a passphrase into the key; it must match on both sides.
+    """
 
 
-def _write_dev_log(command: str, log: dict[str, object]) -> None:
-    path = _dev_log_path(command)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    log["log_path"] = str(path)
-    path.write_text(json.dumps(log, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+@main.command()
+@input_argument
+@click.option("-o", "--output", type=click.Path(path_type=Path, dir_okay=False), help="Write to FILE instead of stdout.")
+@force_option
+@verbose_option
+def enc(input_file: str | None, output: Path | None, force: bool, verbose: bool) -> None:
+    """Compress, encrypt, and encode INPUT_FILE, or stdin when omitted.
 
-
-def _base_dev_log(command: str) -> dict[str, object]:
-    return {
-        "command": command,
-        "cwd": str(Path.cwd()),
-        "pid": os.getpid(),
-        "argv": sys.argv,
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "streams": {
-            "stdin_isatty": sys.stdin.isatty(),
-            "stdout_isatty": sys.stdout.isatty(),
-            "stderr_isatty": sys.stderr.isatty(),
-        },
-        "environment": {
-            "ts_key_set": os.getenv("TS_KEY") is not None,
-        },
-    }
-
-
-def _bytes_summary(data: bytes) -> dict[str, object]:
-    return {
-        "bytes": len(data),
-        "sha256": sha256(data).hexdigest(),
-        "prefix_hex": data[:40].hex(),
-        "suffix_hex": data[-40:].hex(),
-    }
-
-
-def _text_summary(text: str) -> dict[str, object]:
-    encoded = text.encode("ascii")
-    return {
-        "chars": len(text),
-        "sha256": sha256(encoded).hexdigest(),
-        "prefix": text[:80],
-        "suffix": text[-80:],
-        "contains_newline": "\n" in text,
-        "contains_carriage_return": "\r" in text,
-    }
-
-
-def _wrap_encoded_output(text: str) -> str:
-    return "\n".join(text[i : i + OUTPUT_WRAP_COLUMNS] for i in range(0, len(text), OUTPUT_WRAP_COLUMNS))
-
-
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.argument("input_file", required=False, type=click.Path(dir_okay=False))
-@click.option("--dev", is_flag=True, help="Write detailed debug info to /tmp/text-serdes-dev/enc-latest.json.")
-def enc_main(input_file: str | None = None, dev: bool = False) -> None:
-    """Compress, encrypt, and encode INPUT_FILE or stdin when omitted."""
-    log = _base_dev_log("enc") if dev else {}
+    A named INPUT_FILE has its basename embedded in the payload. Alias: encode.
+    """
     try:
-        data = read_input(input_file)
-        filename = Path(input_file).name if input_file is not None else None
-        output = encrypt_bytes(data, filename=filename)
-        wrapped_output = _wrap_encoded_output(output)
-        if dev:
-            wrapped_lines = wrapped_output.splitlines()
-            log["input"] = {
-                "source": input_file if input_file is not None else "stdin",
-                "filename_embedded": filename,
-                **_bytes_summary(data),
-            }
-            log["output"] = {
-                **_text_summary(output),
-                "wrap_columns": OUTPUT_WRAP_COLUMNS,
-                "wrapped_line_count": len(wrapped_lines),
-                "wrapped_max_line_chars": max((len(line) for line in wrapped_lines), default=0),
-                "stdout_bytes_with_trailing_newline": len(wrapped_output.encode("ascii")) + 1,
-            }
-            log["result"] = {"ok": True}
+        source = _source(input_file)
+        data = _read(source)
+        filename = None if source is None else source.name
+        encoded = encode(data, filename=filename, passphrase=_passphrase())
+        _write(wrap(encoded, WRAP_COLUMNS).encode("ascii") + b"\n", output, force)
     except (OSError, CodecError) as exc:
-        if dev:
-            log["result"] = {"ok": False, "error_type": type(exc).__name__, "error": str(exc)}
         raise click.ClickException(str(exc)) from exc
-    finally:
-        if dev:
-            _write_dev_log("enc", log)
 
-    click.echo(wrapped_output)
+    if verbose:
+        source = "stdin" if filename is None else f"{filename!r} (name embedded)"
+        _note(f"encoded {len(data)} bytes from {source} into {len(encoded)} characters")
 
 
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.argument("input_file", required=False, type=click.Path(dir_okay=False))
-@click.option("--dev", is_flag=True, help="Write detailed debug info to /tmp/text-serdes-dev/dec-latest.json.")
+@main.command()
+@input_argument
 @click.option(
+    "-o",
     "--output",
-    type=click.Path(path_type=Path, dir_okay=True, file_okay=True, writable=True),
+    type=click.Path(path_type=Path),
+    help="Write to PATH instead of stdout. If PATH is a directory, use the filename embedded in the payload.",
 )
-def dec_main(input_file: str | None = None, dev: bool = False, output: Path | None = None) -> None:
-    """Decode, decrypt, and decompress INPUT_FILE or stdin when omitted."""
-    log = _base_dev_log("dec") if dev else {}
+@force_option
+@verbose_option
+def dec(input_file: str | None, output: Path | None, force: bool, verbose: bool) -> None:
+    """Decode, decrypt, and decompress INPUT_FILE, or stdin when omitted.
+
+    The input may be a messy paste; everything outside the payload markers is
+    ignored. Output goes to stdout unless --output is given. Alias: decode.
+    """
     try:
-        raw_input = read_input(input_file)
-        if dev:
-            log["input"] = {
-                "source": input_file if input_file is not None else "stdin",
-                **_bytes_summary(raw_input),
-            }
-        encoded = raw_input.decode("ascii")
-        decode_debug: dict[str, object] = {}
-        if dev:
-            normalized = "".join(encoded.split())
-            log["encoded_text"] = {
-                **_text_summary(encoded),
-                "non_whitespace_chars": len(normalized),
-                "non_whitespace_sha256": sha256(normalized.encode("ascii")).hexdigest(),
-            }
-            log["decode"] = decode_debug
-        payload = decrypt_payload(encoded, debug=decode_debug if dev else None)
-    except (OSError, UnicodeDecodeError, CodecError) as exc:
-        if dev:
-            log["result"] = {"ok": False, "error_type": type(exc).__name__, "error": str(exc)}
-            _write_dev_log("dec", log)
+        text = _read(_source(input_file)).decode("utf-8", errors="replace")
+        decoded = decode(text, passphrase=_passphrase())
+        target = output
+        if output is not None and output.is_dir():
+            if decoded.filename is None:
+                raise CodecError("--output is a directory, but the payload has no embedded filename")
+            # Never trust a path from the payload: keep only its final component.
+            target = output / Path(decoded.filename).name
+        _write(decoded.data, target, force)
+    except (OSError, CodecError) as exc:
         raise click.ClickException(str(exc)) from exc
 
-    if output is not None:
-        if output.exists() and output.is_dir():
-            if payload.filename is None:
-                exc = CodecError("--output is a directory, but the encoded input has no embedded filename")
-                if dev:
-                    log["result"] = {"ok": False, "error_type": type(exc).__name__, "error": str(exc)}
-                    _write_dev_log("dec", log)
-                raise click.ClickException(str(exc)) from exc
-            output_path = output / Path(payload.filename).name
-        else:
-            output_path = output
+    if verbose:
+        name = "none" if decoded.filename is None else repr(decoded.filename)
+        packing = "zlib" if decoded.compressed else "raw"
+        destination = "stdout" if target is None else str(target)
+        _note(f"decoded {len(decoded.data)} bytes ({packing}, embedded filename: {name}) to {destination}")
 
-        try:
-            write_output(payload.data, output_path)
-        except OSError as exc:
-            if dev:
-                log["result"] = {"ok": False, "error_type": type(exc).__name__, "error": str(exc)}
-                _write_dev_log("dec", log)
-            raise click.ClickException(str(exc)) from exc
-        if dev:
-            log["output"] = {
-                "target": str(output_path),
-                "embedded_filename": payload.filename,
-                "payload_bytes": len(payload.data),
-            }
-            log["result"] = {"ok": True}
-            _write_dev_log("dec", log)
+
+def _source(input_file: str | None) -> Path | None:
+    """Return the input path, or None when input comes from stdin."""
+    return None if input_file is None or input_file == "-" else Path(input_file)
+
+
+def _passphrase() -> str:
+    return os.environ.get("TS_KEY", "")
+
+
+def _read(source: Path | None) -> bytes:
+    if source is None:
+        return click.get_binary_stream("stdin").read()
+    return source.read_bytes()
+
+
+def _write(payload: bytes, target: Path | None, force: bool) -> None:
+    if target is None:
+        click.get_binary_stream("stdout").write(payload)
         return
-
-    if payload.filename is not None:
-        try:
-            write_output(payload.data, Path(payload.filename).name)
-        except OSError as exc:
-            if dev:
-                log["result"] = {"ok": False, "error_type": type(exc).__name__, "error": str(exc)}
-                _write_dev_log("dec", log)
-            raise click.ClickException(str(exc)) from exc
-        if dev:
-            log["output"] = {
-                "target": Path(payload.filename).name,
-                "embedded_filename": payload.filename,
-                "payload_bytes": len(payload.data),
-            }
-            log["result"] = {"ok": True}
-            _write_dev_log("dec", log)
-        return
-
-    write_output(payload.data, None)
-    if dev:
-        log["output"] = {
-            "target": "stdout",
-            "embedded_filename": payload.filename,
-            "payload_bytes": len(payload.data),
-        }
-        log["result"] = {"ok": True}
-        _write_dev_log("dec", log)
+    try:
+        with open(target, "wb" if force else "xb") as handle:
+            handle.write(payload)
+    except FileExistsError as exc:
+        raise CodecError(f"{target} already exists; use --force to overwrite it") from exc
 
 
-if __name__ == "__main__":
-    enc_main()
+def _note(message: str) -> None:
+    click.echo(f"text-serdes: {message}", err=True)

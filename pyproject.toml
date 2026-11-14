@@ -1,6 +1,6 @@
 [project]
 name = "text-serdes"
-version = "0.1.1"
+version = "0.2.0"
 description = "Mangle and serialize text for easy transport over copy/paste interfaces"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,12 +12,10 @@ dependencies = [
 ]
 
 [project.scripts]
-text-serdes-enc = "text_serdes.cli:enc_main"
-text-serdes-dec = "text_serdes.cli:dec_main"
+text-serdes = "text_serdes.cli:main"
 
 [dependency-groups]
 dev = [
-    "hatchling>=1.28.0",
     "pytest>=9.0.3",
 ]
 
