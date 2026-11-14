@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="260" viewBox="0 0 880 260" role="img" aria-labelledby="title desc">
+  <title id="title">text-serdes</title>
+  <desc id="desc">The text-serdes logo: the -ts- frame marker in a rounded tile, beside the project name and a sample encoded payload.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#16213a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#64748b" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#64748b" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#64748b" stop-opacity="0.95"/>
+    </linearGradient>
+    <style>
+      .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace; }
+      .sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="880" height="260" rx="20" fill="url(#bg)"/>
+  <rect x="0.75" y="0.75" width="878.5" height="258.5" rx="19.25" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Mark: the "-ts-" frame marker -->
+  <g transform="translate(56 58)">
+    <rect width="144" height="144" rx="30" fill="#0f172a" stroke="url(#accent)" stroke-width="5"/>
+    <rect x="18" y="66" width="20" height="9" rx="4.5" fill="url(#accent)"/>
+    <rect x="106" y="66" width="20" height="9" rx="4.5" fill="url(#accent)"/>
+    <text class="mono" x="72" y="90" text-anchor="middle" font-size="56" font-weight="700" fill="#f8fafc" textLength="60" lengthAdjust="spacingAndGlyphs">ts</text>
+  </g>
+
+  <!-- Wordmark -->
+  <text class="mono" x="236" y="118" font-size="58" font-weight="700" fill="#f8fafc" textLength="388" lengthAdjust="spacingAndGlyphs">text<tspan fill="url(#accent)">-</tspan>serdes</text>
+  <text class="sans" x="238" y="156" font-size="19" fill="#94a3b8">Any bytes in. Paste-safe text out. And back again.</text>
+
+  <!-- A real payload, framed by its markers -->
+  <text class="mono" x="238" y="198" font-size="15" textLength="586" lengthAdjust="spacingAndGlyphs"><tspan fill="url(#accent)" font-weight="700">-ts-</tspan><tspan fill="url(#fade)">CA)YGBS0@L{ylDa%MrRk;Qg_3&lt;,BK|Lx8?XcApA`we%CsL(qGsUK&amp;H91k</tspan><tspan fill="url(#accent)" font-weight="700">-end-</tspan></text>
+</svg>
