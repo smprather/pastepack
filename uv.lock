@@ -182,6 +182,33 @@ wheels = [
 ]
 
 [[package]]
+name = "pastepack"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "base91" },
+    { name = "click" },
+    { name = "cryptography" },
+    { name = "rich-click" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "base91", specifier = ">=1.0.1" },
+    { name = "click", specifier = ">=8.4.1" },
+    { name = "cryptography", specifier = ">=48.0.0" },
+    { name = "rich-click", specifier = ">=1.9.8" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0.3" }]
+
+[[package]]
 name = "pluggy"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -250,30 +277,3 @@ sdist = { url = "https://files.pythonhosted.org/packages/f7/ea/21e4867ea0ef881ff
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6d/97/a87901aef6b7e7e4a34c6dd6cc17dca8594a592ef9d9dd765fca2b7facf7/rich_click-1.9.8-py3-none-any.whl", hash = "sha256:12873865396e6927835d4eabb1cc3996edcd65b7ac9b2391a29eca4f335a2f93", size = 72189, upload-time = "2026-05-28T19:54:57.867Z" },
 ]
-
-[[package]]
-name = "text-serdes"
-version = "0.2.0"
-source = { editable = "." }
-dependencies = [
-    { name = "base91" },
-    { name = "click" },
-    { name = "cryptography" },
-    { name = "rich-click" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "base91", specifier = ">=1.0.1" },
-    { name = "click", specifier = ">=8.4.1" },
-    { name = "cryptography", specifier = ">=48.0.0" },
-    { name = "rich-click", specifier = ">=1.9.8" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.0.3" }]
