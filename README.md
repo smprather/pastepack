@@ -118,6 +118,15 @@ A file that merely contains a payload somewhere, such as a saved terminal transc
 
 `pp` takes no options and, unlike `pack` and `unpack`, **always overwrites** existing output files.
 
+It also prints the equivalent `pastepack` command on stderr, shell-quoted and with the effective `--columns 150`, so you can copy it, tweak one option, or record what happened:
+
+```console
+$ pp 'my note.txt'
+pastepack pack --force --output 'my note.txt.pack' --columns 150 'my note.txt'
+```
+
+The printed command assumes the same `PASTEPACK_KEY` and `PASTEPACK_OUTPUT_DIR` environment.
+
 ### Environment variables
 
 | Variable | Used by | Effect |

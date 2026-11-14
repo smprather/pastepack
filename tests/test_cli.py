@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -290,6 +291,62 @@ def test_pp_packs_plain_file_next_to_input(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert (tmp_path / "sub" / "note.txt.pack").read_bytes().startswith(b"-pack-")
+
+
+def test_pp_prints_the_equivalent_pack_command() -> None:
+    Path("note.txt").write_bytes(b"hello")
+
+    result = run_pp("note.txt")
+
+    assert result.stdout == ""
+    assert result.stderr == "pastepack pack --force --output note.txt.pack --columns 150 note.txt\n"
+
+
+def test_pp_prints_the_equivalent_unpack_command() -> None:
+    Path("note.txt").write_bytes(b"hello")
+    assert run_pp("note.txt").exit_code == 0
+
+    result = run_pp("note.txt.pack")
+
+    assert result.stdout == ""
+    assert result.stderr == "pastepack unpack --force --output note.txt note.txt.pack\n"
+
+
+def test_pp_quotes_awkward_paths_in_the_printed_command() -> None:
+    Path("my note.txt").write_bytes(b"hello")
+
+    result = run_pp("my note.txt")
+
+    assert result.stderr == (
+        "pastepack pack --force --output 'my note.txt.pack' --columns 150 'my note.txt'\n"
+    )
+
+
+def test_pp_printed_pack_command_produces_the_same_payload() -> None:
+    Path("sub").mkdir()
+    Path("sub/note.txt").write_bytes(b"hello\x00")
+    argv = shlex.split(run_pp("sub/note.txt").stderr)
+    assert argv[0] == "pastepack"
+    Path("sub/note.txt.pack").unlink()
+
+    result = run(*argv[1:])
+
+    assert result.exit_code == 0, result.stderr
+    assert run("unpack", "sub/note.txt.pack").stdout_bytes == b"hello\x00"
+
+
+def test_pp_printed_unpack_command_restores_the_same_file() -> None:
+    Path("note.txt").write_bytes(b"payload")
+    assert run_pp("note.txt").exit_code == 0
+    Path("note.txt").unlink()
+    argv = shlex.split(run_pp("note.txt.pack").stderr)
+    assert argv[0] == "pastepack"
+    Path("note.txt").unlink()
+
+    result = run(*argv[1:])
+
+    assert result.exit_code == 0, result.stderr
+    assert Path("note.txt").read_bytes() == b"payload"
 
 
 def test_pp_packs_into_output_dir_when_it_exists(tmp_path: Path) -> None:

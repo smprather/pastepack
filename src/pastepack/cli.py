@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -112,7 +113,9 @@ def pp(input_file: Path) -> None:
     directory named by PASTEPACK_OUTPUT_DIR when that directory exists,
     otherwise next to INPUT_FILE. Existing output files are always overwritten.
 
-    To pull a payload out of the middle of a messy paste, use 'pastepack unpack'.
+    It prints the equivalent 'pastepack pack' or 'pastepack unpack' command on
+    stderr, so you can reproduce or adjust what it did. To pull a payload out of
+    the middle of a messy paste, use 'pastepack unpack'.
     """
     try:
         data = input_file.read_bytes()
@@ -124,13 +127,15 @@ def pp(input_file: Path) -> None:
             # Never trust a path from the payload: keep only its final component.
             target = Path(Path(unpacked.filename).name)
             _write(unpacked.data, target, True)
-            _note(f"unpacked {input_file} to {target}")
+            _show_command("unpack", "--force", "--output", str(target), str(input_file))
         else:
             out_dir = _pack_dir(input_file)
             target = out_dir / (input_file.name + PACKED_SUFFIX)
             packed = pack(data, filename=input_file.name, passphrase=_passphrase())
             _write(wrap(packed, WRAP_COLUMNS).encode("ascii") + b"\n", target, True)
-            _note(f"packed {input_file} to {target}")
+            _show_command(
+                "pack", "--force", "--output", str(target), "--columns", str(WRAP_COLUMNS), str(input_file)
+            )
     except (OSError, PackError) as exc:
         raise click.ClickException(str(exc)) from exc
 
@@ -183,3 +188,8 @@ def _write(payload: bytes, target: Path | None, force: bool) -> None:
 
 def _note(message: str) -> None:
     click.echo(f"pastepack: {message}", err=True)
+
+
+def _show_command(*argv: str) -> None:
+    """Print the equivalent pastepack command on stderr, ready to copy."""
+    click.echo(" ".join(["pastepack", *(shlex.quote(arg) for arg in argv)]), err=True)
